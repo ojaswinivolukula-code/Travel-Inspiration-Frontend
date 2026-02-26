@@ -34,7 +34,7 @@ const Register = () => {
 
       // Optional: Auto-login after registration
       const loginRes = await axios.post("http://localhost:5000/api/auth/login", { email, password });
-      localStorage.setItem("token", loginRes.data.session.access_token);
+      sessionStorage.setItem("token", loginRes.data.session.access_token);
       localStorage.setItem("user", JSON.stringify(loginRes.data.user));
 
       navigate("/dashboard");

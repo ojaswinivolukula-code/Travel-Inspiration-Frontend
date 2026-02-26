@@ -1,33 +1,58 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const handleGetStarted = () => {
+    if (user) navigate("/dashboard");
+    else navigate("/register");
+  };  
+
+  const handleLogin = () => {
+    navigate("/login");
+  };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-linear-to-r from-purple-500 via-pink-500 to-red-500 text-white">
-      <h1 className="text-5xl font-extrabold mb-4 drop-shadow-lg animate-pulse">
-        Welcome to MyApp
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", background: "linear-gradient(135deg, #667eea 0%, #f093fb 50%, #f5576c 100%)", color: "#fff", padding: "20px", textAlign: "center" }}>
+      <h1 style={{ fontSize: "clamp(28px, 6vw, 52px)", fontWeight: "800", marginBottom: "16px", textShadow: "0 2px 10px rgba(0,0,0,0.2)" }}>
+        ✈️ Welcome to Travel Inspo
       </h1>
-      <p className="text-lg mb-12 text-center max-w-md drop-shadow-sm">
-        Join our community and explore amazing features. Create an account or login to get started!
+      <p style={{ fontSize: "clamp(14px, 2.5vw, 18px)", marginBottom: "48px", maxWidth: "500px", opacity: 0.9, lineHeight: 1.6 }}>
+        Discover amazing destinations, plan your trips, and share your adventures with fellow travelers.
       </p>
 
-      <div className="flex gap-8">
-        <button
-          onClick={() => navigate("/register")}
-          className="px-10 py-3 bg-white text-purple-600 font-bold rounded-full shadow-lg hover:bg-purple-100 hover:text-purple-700 transform hover:-translate-y-1 hover:scale-105 transition-all duration-300"
-        >
-          Register
-        </button>
-
-        <button
-          onClick={() => navigate("/login")}
-          className="px-10 py-3 border-2 border-white text-white font-bold rounded-full shadow-lg hover:bg-white hover:text-purple-600 transform hover:-translate-y-1 hover:scale-105 transition-all duration-300"
-        >
-          Login
-        </button>
+      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", justifyContent: "center" }}>
+        <button onClick={handleGetStarted} style={getStartedStyle}>Get Started</button>
+        <button onClick={handleLogin} style={loginStyle}>Login</button>
       </div>
     </div>
   );
 }
+
+const getStartedStyle = {
+  padding: "14px 36px",
+  backgroundColor: "#fff",
+  color: "#667eea",
+  fontWeight: "700",
+  fontSize: "16px",
+  borderRadius: "50px",
+  border: "none",
+  cursor: "pointer",
+  boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
+  transition: "transform 0.2s",
+};
+
+const loginStyle = {
+  padding: "14px 36px",
+  backgroundColor: "transparent",
+  color: "#fff",
+  fontWeight: "700",
+  fontSize: "16px",
+  borderRadius: "50px",
+  border: "2px solid #fff",
+  cursor: "pointer",
+  transition: "transform 0.2s",
+};
