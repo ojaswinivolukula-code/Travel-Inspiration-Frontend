@@ -1,370 +1,366 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import OverviewTab from "../components/destination/OverviewTab";
+import PlacesTab from "../components/destination/PlacesTab";
+import ActivitiesTab from "../components/destination/ActivitiesTab";
+import CulinaryTab from "../components/destination/CulinaryTab";
+import ReviewsTab from "../components/destination/ReviewsTab";
+import axiosInstance from "../services/axiosInstance";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { number } from "zod";
 
 const DestinationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [destination, setDestination] = useState(null);
-  const [places, setPlaces] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [selectedPlaces, setSelectedPlaces] = useState([]);
+  const [places, setPlaces]           = useState([]);
+  const [activities, setActivities]   = useState([]);
+  const [culinary, setCulinary]       = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [selectedPlaces, setSelectedPlaces]         = useState([]);
   const [selectedActivities, setSelectedActivities] = useState([]);
-  const [selectedCulinary, setSelectedCulinary] = useState([]);
-  const [culinary, setCulinary] = useState([]);
-  const [saving, setSaving] = useState(false);
+  const [selectedCulinary, setSelectedCulinary]     = useState([]);
+  const [saving, setSaving]       = useState(false);
   const [tripCreated, setTripCreated] = useState(false);
+  const [error, setError]         = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const token = sessionStorage.getItem("token");
-        const headers = { Authorization: `Bearer ${token}` };
-        const [destRes, placesRes, activitiesRes, culinaryRes] = await Promise.all([
-          fetch(`http://localhost:5000/api/destinations/${id}`, { headers }),
-          fetch(`http://localhost:5000/api/places/${id}`, { headers }),
-          fetch(`http://localhost:5000/api/activities/destination/${id}`, { headers }),
-          fetch(`http://localhost:5000/api/culinary/${id}`, { headers }),
-        ]);
-        const destData = await destRes.json();
-        const placesData = await placesRes.json();
-        const activitiesData = await activitiesRes.json();
-        const culinaryData = await culinaryRes.json();
-
-        setDestination(Array.isArray(destData) ? destData[0] : destData);
-        setPlaces(Array.isArray(placesData) ? placesData : []);
-        setActivities(Array.isArray(activitiesData) ? activitiesData : []);
-        setCulinary(Array.isArray(culinaryData) ? culinaryData : []);
-      } catch (err) {
-        console.error("Error fetching destination:", err);
-      } finally {
-        setLoading(false);
-      }
+        const destRes = await axiosInstance.get(`/destinations/${id}`);
+        setDestination(Array.isArray(destRes.data) ? destRes.data[0] : destRes.data);
+        try { const r = await axiosInstance.get(`/places/destination/${id}`);     setPlaces(Array.isArray(r.data) ? r.data : r.data.places || []); }     catch { setPlaces([]); }
+        try { const r = await axiosInstance.get(`/activities/destination/${id}`); setActivities(Array.isArray(r.data) ? r.data : r.data.activities || []); } catch { setActivities([]); }
+        try { const r = await axiosInstance.get(`/culinary/destination/${id}`);   setCulinary(Array.isArray(r.data) ? r.data : r.data.culinary || []); }   catch { setCulinary([]); }
+      } catch { setError("Failed to load destination details"); }
+      finally { setLoading(false); }
     };
     fetchAll();
   }, [id]);
 
-  const togglePlace = (place) => setSelectedPlaces((prev) => prev.find((p) => p.id === place.id) ? prev.filter((p) => p.id !== place.id) : [...prev, place]);
-  const toggleActivity = (activity) => setSelectedActivities((prev) => prev.find((a) => a.id === activity.id) ? prev.filter((a) => a.id !== activity.id) : [...prev, activity]);
-  const toggleCulinary = (item) => setSelectedCulinary((prev) => prev.find((c) => c.id === item.id) ? prev.filter((c) => c.id !== item.id) : [...prev, item]);
+  const toggle = (setter) => (itemId) =>
+    setter((prev) => prev.includes(itemId) ? prev.filter((x) => x !== itemId) : [...prev, itemId]);
 
-  const activityCost = selectedActivities.reduce((sum, a) => sum + (a.estimated_cost || 0), 0);
-  const culinaryCost = selectedCulinary.reduce((sum, c) => sum + (c.avg_price || 0), 0);
-  const placeCost = selectedPlaces.reduce((sum, p) => sum + (p.entry_fee || 0), 0);
-  const baseBudget = (destination?.estimated_flight_cost || 0) + (destination?.estimated_stay_cost || 0) + (destination?.estimated_food_cost || 0);
-  const totalBudget = baseBudget + activityCost + culinaryCost + placeCost;
+  const activityCost = selectedActivities.reduce((s, id) => s + (activities.find((a) => a.id === id)?.estimated_cost || 0), 0);
+  const culinaryCost = selectedCulinary.reduce((s, id)   => s + (culinary.find((c)   => c.id === id)?.avg_price      || 0), 0);
+  const placeCost    = selectedPlaces.reduce((s, id)     => s + (places.find((p)     => p.id === id)?.entry_fee      || 0), 0);
+  const baseBudget   = (destination?.estimated_flight_cost || 0) + (destination?.estimated_stay_cost || 0) + (destination?.estimated_food_cost || 0);
+  const totalBudget  = baseBudget + activityCost + culinaryCost + placeCost;
+  const totalSelected = selectedPlaces.length + selectedActivities.length + selectedCulinary.length;
 
-  // ✅ FIXED: clean single function, reads token fresh, navigates to trip detail
   const handleAddToTrip = async () => {
     setSaving(true);
     try {
-      const token = sessionStorage.getItem("token");
-      if (!token) {
-        alert("You must be logged in to create a trip!");
-        setSaving(false);
-        return;
-      }
-      const hdrs = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-
-      // Step 1: Create trip
-      const tripRes = await fetch("http://localhost:5000/api/trips", {
-        method: "POST",
-        headers: hdrs,
-        body: JSON.stringify({
-          name: `Trip to ${destination.name}`,
-          status: "planned",
-          total_budget: totalBudget,
-          destination_id: destination.id,
-        }),
-      });
-      const tripData = await tripRes.json();
-      const tripId = tripData?.id || tripData?.[0]?.id;
+      const tripRes = await axiosInstance.post("/trips", { destination_id: destination.id, total_budget: totalBudget, status: "planned",name:`Trip to ${destination.name}`,number_of_days:1 });
+      const tripId = tripRes.data?.id || tripRes.data?.trip?.id;
       if (!tripId) throw new Error("Trip creation failed");
-
-      // Step 2: Save selected places
-      for (const place of selectedPlaces) {
-        await fetch("http://localhost:5000/api/trip-items/places", {
-          method: "POST",
-          headers: hdrs,
-          body: JSON.stringify({ trip_id: tripId, place_id: place.id }),
-        });
-      }
-
-      // Step 3: Save selected activities
-      for (const activity of selectedActivities) {
-        await fetch("http://localhost:5000/api/trip-items/activities", {
-          method: "POST",
-          headers: hdrs,
-          body: JSON.stringify({ trip_id: tripId, activity_id: activity.id }),
-        });
-      }
-
-      // Step 4: Save selected culinary
-      for (const item of selectedCulinary) {
-        await fetch("http://localhost:5000/api/trip-items/culinary", {
-          method: "POST",
-          headers: hdrs,
-          body: JSON.stringify({ trip_id: tripId, culinary_id: item.id }),
-        });
-      }
-
+      for (const placeId    of selectedPlaces)     await axiosInstance.post(`/trips/${tripId}/places`,     { place_id:    placeId    });
+      for (const activityId of selectedActivities) await axiosInstance.post(`/trips/${tripId}/activities`, { activity_id: activityId });
+      for (const culinaryId of selectedCulinary)   await axiosInstance.post(`/trips/${tripId}/culinary`,  { culinary_id: culinaryId });
       setTripCreated(true);
-      // ✅ Navigate to trip detail page (not dashboard) so user sees their selections
       setTimeout(() => navigate(`/trips/${tripId}`), 1500);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
+    } catch { alert("Failed to create trip. Please try again."); }
+    finally { setSaving(false); }
   };
 
+  // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#64748b" }}>
-      <div style={{ textAlign: "center" }}><div style={{ fontSize: "48px", marginBottom: "16px" }}>🌍</div><p>Loading destination...</p></div>
-    </div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0;} body{font-family:'DM Sans',sans-serif;}
+        @keyframes ld{0%,80%,100%{transform:scale(.6);opacity:.3}40%{transform:scale(1.2);opacity:1}}
+      `}</style>
+      <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", background:"#FDFAF7", flexDirection:"column", gap:"20px", fontFamily:"'DM Sans',sans-serif" }}>
+        <div style={{ fontSize:"64px" }}>🌍</div>
+        <p style={{ fontFamily:"'Playfair Display',serif", fontSize:"22px", fontStyle:"italic", color:"#78716C" }}>Loading destination...</p>
+        <div style={{ display:"flex", gap:"8px" }}>
+          {[0,.2,.4].map((d,i)=><div key={i} style={{ width:"10px",height:"10px",borderRadius:"50%",background:"#D4A853",animation:`ld 1.4s ${d}s ease-in-out infinite` }}/>)}
+        </div>
+      </div>
+    </>
   );
 
   if (!destination) return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: "48px" }}>😕</div>
-        <p>Destination not found</p>
-        <button onClick={() => navigate(-1)} style={btnStyle}>Go Back</button>
-      </div>
+    <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", background:"#FDFAF7", flexDirection:"column", gap:"16px", fontFamily:"'DM Sans',sans-serif" }}>
+      <div style={{ fontSize:"56px" }}>😕</div>
+      <p style={{ fontFamily:"'Playfair Display',serif", fontSize:"24px", color:"#1C1917" }}>Destination not found</p>
+      {error && <p style={{ color:"#C4552A", fontSize:"14px" }}>{error}</p>}
+      <Button onClick={() => navigate("/dashboard")} style={{ background:"#1C1917", color:"#D4A853", border:"none", padding:"12px 28px", borderRadius:"50px", fontFamily:"'DM Sans',sans-serif", fontWeight:600, height:"auto" }}>
+        Go to Dashboard
+      </Button>
     </div>
   );
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Lato:wght@300;400;700&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Lato', sans-serif; }
-        .detail-hero { position: relative; height: 70vh; min-height: 400px; overflow: hidden; }
-        .hero-img { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.6); }
-        .hero-placeholder { width: 100%; height: 100%; background: linear-gradient(135deg, #0f172a, #1e3a5f); display: flex; align-items: center; justify-content: center; font-size: 120px; }
-        .hero-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 40px; background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: #fff; }
-        .hero-back { position: absolute; top: 24px; left: 24px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 8px 16px; border-radius: 50px; cursor: pointer; font-size: 14px; backdrop-filter: blur(10px); }
-        .hero-back:hover { background: rgba(255,255,255,0.3); }
-        .detail-tabs { display: flex; gap: 0; border-bottom: 1px solid #e2e8f0; background: #fff; position: sticky; top: 0; z-index: 10; overflow-x: auto; }
-        .tab-btn { padding: 16px 24px; border: none; background: none; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent; transition: all 0.2s; font-family: 'Lato', sans-serif; }
-        .tab-btn.active { color: #0f172a; border-bottom-color: #f59e0b; }
-        .tab-btn:hover { color: #0f172a; }
-        .detail-content { max-width: 1100px; margin: 0 auto; padding: 40px 24px 120px; }
-        .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 40px; }
-        .info-card { background: #f8fafc; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #e2e8f0; }
-        .places-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-        .place-card { background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s; }
-        .place-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
-        .activities-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-        .activity-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.2s; }
-        .activity-card:hover { transform: translateY(-2px); }
-        @media (max-width: 768px) { .detail-hero { height: 50vh; } .hero-overlay { padding: 20px; } .detail-content { padding: 24px 16px 120px; } }
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Sans:wght@300;400;500;600&display=swap');
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        :root{
+          --sand:#F5EFE6; --sand-dark:#EAE0D5;
+          --ink:#1C1917; --ink-light:#44403C; --ink-soft:#78716C;
+          --terra:#C4552A; --terra-l:#E8724A;
+          --gold:#D4A853; --white:#FDFAF7; --bdr:#E7E5E4;
+        }
+        html,body{ font-family:'DM Sans',sans-serif; background:var(--white); color:var(--ink); }
+
+        /* HERO */
+        .ddhero{ position:relative; height:72vh; min-height:440px; overflow:hidden; }
+        .ddhimg{ width:100%; height:100%; object-fit:cover; transition:transform 8s ease; transform:scale(1.05); }
+        .ddhero:hover .ddhimg{ transform:scale(1); }
+        .ddhnone{ width:100%; height:100%; background:linear-gradient(160deg,#2D1B0E,#5C3520,#C4552A); display:flex; align-items:center; justify-content:center; font-size:120px; }
+        .ddhgrad{ position:absolute; inset:0; background:linear-gradient(to bottom,rgba(28,25,23,.1) 0%,transparent 30%,transparent 50%,rgba(28,25,23,.85) 100%); }
+        .ddhcontent{ position:absolute; bottom:0; left:0; right:0; padding:48px 56px; }
+        .ddhbadges{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+        .ddhtitle{ font-family:'Playfair Display',serif; font-size:clamp(36px,6vw,72px); font-weight:900; color:#fff; line-height:1.0; margin-bottom:12px; text-shadow:0 2px 20px rgba(0,0,0,.3); }
+        .ddhmeta{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+        .ddhmeta-item{ font-size:13px; color:rgba(255,255,255,.7); display:flex; align-items:center; gap:6px; }
+
+        /* TABS — override shadcn to match TravelX style */
+        .dd-tabs-wrap{
+          background:var(--white);
+          border-bottom:1px solid var(--bdr);
+          position:sticky; top:0; z-index:40;
+          padding:0 56px;
+          box-shadow:0 2px 12px rgba(28,25,23,.06);
+          overflow-x:auto;
+        }
+        .dd-tabs-wrap [role=tablist]{
+          background:transparent !important;
+          border-radius:0 !important;
+          padding:0 !important;
+          gap:0 !important;
+          height:auto !important;
+          display:flex;
+          width:100%;
+        }
+        .dd-tabs-wrap [role=tab]{
+          font-family:'DM Sans',sans-serif !important;
+          font-size:13px !important;
+          font-weight:600 !important;
+          color:var(--ink-soft) !important;
+          background:transparent !important;
+          border-radius:0 !important;
+          border-bottom:2.5px solid transparent !important;
+          padding:18px 4px !important;
+          margin-right:32px !important;
+          white-space:nowrap !important;
+          transition:all .2s !important;
+          box-shadow:none !important;
+          height:auto !important;
+        }
+        .dd-tabs-wrap [role=tab]:hover{ color:var(--ink) !important; }
+        .dd-tabs-wrap [role=tab][data-state=active]{
+          color:var(--ink) !important;
+          border-bottom-color:var(--terra) !important;
+          background:transparent !important;
+        }
+        .ddtab-count{
+          display:inline-flex; align-items:center; justify-content:center;
+          background:var(--sand); color:var(--ink-soft);
+          font-size:10px; font-weight:700;
+          padding:2px 7px; border-radius:10px; margin-left:7px;
+          transition:all .2s;
+        }
+        [role=tab][data-state=active] .ddtab-count{ background:var(--terra); color:#fff; }
+
+        /* CONTENT */
+        .ddcontent{ max-width:1140px; margin:0 auto; padding:48px 56px 160px; }
+
+        /* BUDGET BAR */
+        .ddbbar{
+          position:fixed; bottom:0; left:0; right:0;
+          background:linear-gradient(135deg, #2D1B0E 0%, #4A2410 60%, #5C3520 100%);
+          border-top:2px solid rgba(212,168,83,.2);
+          box-shadow:0 -8px 40px rgba(28,25,23,.35);
+          z-index:100; padding:14px 40px;
+          display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+        }
+        .dbbitem{ text-align:center; }
+        .dbblbl{ font-size:9px; color:rgba(255,255,255,.4); text-transform:uppercase; letter-spacing:1.5px; font-weight:600; margin-bottom:3px; font-family:'DM Sans',sans-serif; }
+        .dbbval{ font-size:15px; font-weight:700; color:rgba(255,255,255,.9); font-family:'DM Sans',sans-serif; }
+        .dbbval-g{ font-size:15px; font-weight:700; color:#6EE7B7; font-family:'DM Sans',sans-serif; }
+        .dbbdiv{ width:1px; height:36px; background:rgba(255,255,255,.1); margin:0 4px; }
+        .dbbtotal-lbl{ font-size:9px; color:rgba(255,255,255,.4); text-transform:uppercase; letter-spacing:1.5px; font-weight:600; margin-bottom:3px; font-family:'DM Sans',sans-serif; }
+        .dbbtotal-val{ font-family:'Playfair Display',serif; font-size:26px; font-weight:900; color:var(--gold); line-height:1; }
+
+        /* TOAST */
+        .ddtoast{
+          position:fixed; top:24px; right:24px;
+          background:#16a34a; color:#fff;
+          padding:16px 24px; border-radius:14px;
+          font-weight:600; z-index:200;
+          display:flex; gap:14px; align-items:center;
+          box-shadow:0 8px 28px rgba(0,0,0,.2);
+          font-family:'DM Sans',sans-serif;
+          animation:toastIn .35s ease;
+        }
+        @keyframes toastIn{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        .au{animation:fadeUp .45s ease forwards;}
+
+        @media(max-width:768px){
+          .ddhero{height:55vh;} .ddhcontent{padding:28px 24px;}
+          .dd-tabs-wrap{padding:0 20px;} .ddcontent{padding:28px 20px 160px;}
+          .ddbbar{padding:14px 20px;}
+        }
       `}</style>
 
-      <div style={{ background: "#f8fafc", minHeight: "100vh" }}>
-        <div className="detail-hero">
-          {destination.image_url ? <img src={destination.image_url} alt={destination.name} className="hero-img" /> : <div className="hero-placeholder">🌍</div>}
-          <button className="hero-back" onClick={() => navigate("/dashboard")}>← Back</button>
-          <div className="hero-overlay">
-            <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-              {destination.category && <span style={heroTag}>{destination.category}</span>}
-              {destination.country && <span style={heroTag}>📍 {destination.country}</span>}
-            </div>
-            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(28px, 5vw, 52px)", fontWeight: "900", color: "#fff", marginBottom: "8px" }}>{destination.name}</h1>
-            {destination.budget_estimate && <p style={{ color: "#fcd34d", fontSize: "16px", fontWeight: "600" }}>💰 Estimated Budget: ${destination.budget_estimate}</p>}
-          </div>
-        </div>
+      <div style={{ background: "var(--white)", minHeight: "100vh" }}>
 
-        <div className="detail-tabs">
-          {[
-            { id: "overview", label: "Overview" },
-            { id: "places", label: `Places (${places.length})` },
-            { id: "activities", label: `Activities (${activities.length})` },
-            { id: "culinary", label: `Culinary (${culinary.length})` },
-            { id: "reviews", label: "Reviews" },
-          ].map((tab) => (
-            <button key={tab.id} className={`tab-btn ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>
-          ))}
-        </div>
-
-        <div className="detail-content">
-          {activeTab === "overview" && (
-            <div>
-              <div className="info-grid">
-                {destination.country && <div className="info-card"><div style={{ fontSize: "28px", marginBottom: "8px" }}>🌍</div><div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Country</div><div style={{ fontWeight: "700", color: "#0f172a" }}>{destination.country}</div></div>}
-                {destination.category && <div className="info-card"><div style={{ fontSize: "28px", marginBottom: "8px" }}>🏷️</div><div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Category</div><div style={{ fontWeight: "700", color: "#0f172a" }}>{destination.category}</div></div>}
-                {destination.budget_estimate && <div className="info-card"><div style={{ fontSize: "28px", marginBottom: "8px" }}>💰</div><div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Est. Budget</div><div style={{ fontWeight: "700", color: "#0f172a" }}>${destination.budget_estimate}</div></div>}
-                {destination.best_time_to_visit && <div className="info-card"><div style={{ fontSize: "28px", marginBottom: "8px" }}>📅</div><div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Best Time</div><div style={{ fontWeight: "700", color: "#0f172a" }}>{destination.best_time_to_visit}</div></div>}
-                <div className="info-card"><div style={{ fontSize: "28px", marginBottom: "8px" }}>📍</div><div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Places</div><div style={{ fontWeight: "700", color: "#0f172a" }}>{places.length} spots</div></div>
-                <div className="info-card"><div style={{ fontSize: "28px", marginBottom: "8px" }}>🎯</div><div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>Activities</div><div style={{ fontWeight: "700", color: "#0f172a" }}>{activities.length} things to do</div></div>
-              </div>
-              {destination.description && (
-                <div style={{ background: "#fff", borderRadius: "16px", padding: "32px", marginBottom: "32px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                  <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "24px", marginBottom: "16px", color: "#0f172a" }}>About {destination.name}</h2>
-                  <p style={{ lineHeight: "1.8", color: "#475569", fontSize: "16px" }}>{destination.description}</p>
-                </div>
-              )}
-              {places.length > 0 && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                    <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "22px", color: "#0f172a" }}>Top Places</h2>
-                    <button onClick={() => setActiveTab("places")} style={{ background: "none", border: "none", color: "#f59e0b", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}>View all →</button>
-                  </div>
-                  <div className="places-grid">{places.slice(0, 3).map((place) => <PlaceCard key={place.id} place={place} />)}</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "places" && (
-            <div>
-              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "28px", marginBottom: "24px", color: "#0f172a" }}>Places to Visit</h2>
-              {places.length === 0 ? <EmptyState icon="📍" text="No places added yet." /> : (
-                <div className="places-grid">
-                  {places.map((place) => {
-                    const selected = selectedPlaces.find((p) => p.id === place.id);
-                    return (
-                      <div key={place.id} className="place-card" onClick={() => togglePlace(place)} style={{ border: selected ? "2px solid #f59e0b" : "2px solid transparent", cursor: "pointer" }}>
-                        <div style={{ height: "180px", overflow: "hidden", background: "#f1f5f9", position: "relative" }}>
-                          {place.image_url ? <img src={place.image_url} alt={place.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "48px" }}>📍</div>}
-                          {selected && <div style={{ position: "absolute", top: "8px", right: "8px", background: "#f59e0b", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold" }}>✓</div>}
-                        </div>
-                        <div style={{ padding: "16px" }}>
-                          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "6px" }}>{place.name}</h3>
-                          {place.description && <p style={{ fontSize: "13px", color: "#64748b", lineHeight: "1.5", marginBottom: "10px" }}>{place.description?.slice(0, 100)}...</p>}
-                          {place.entry_fee > 0 && <span style={placeTag}>💰 Entry: ₹{place.entry_fee}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "activities" && (
-            <div>
-              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "28px", marginBottom: "24px", color: "#0f172a" }}>Things to Do</h2>
-              {activities.length === 0 ? <EmptyState icon="🎯" text="No activities added yet." /> : (
-                <div className="activities-list">
-                  {activities.map((activity) => {
-                    const selected = selectedActivities.find((a) => a.id === activity.id);
-                    return (
-                      <div key={activity.id} className="activity-card" onClick={() => toggleActivity(activity)} style={{ borderLeft: selected ? "4px solid #10b981" : "4px solid #f59e0b", cursor: "pointer", position: "relative" }}>
-                        {selected && <div style={{ position: "absolute", top: "12px", right: "12px", background: "#10b981", borderRadius: "50%", width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "12px", fontWeight: "bold" }}>✓</div>}
-                        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "8px" }}>{activity.name}</h3>
-                        {activity.description && <p style={{ fontSize: "14px", color: "#64748b", lineHeight: "1.6", marginBottom: "12px" }}>{activity.description}</p>}
-                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                          {activity.type && <span style={actTag}>{activity.type}</span>}
-                          {activity.duration_hours && <span style={actTag}>⏱ {activity.duration_hours}hrs</span>}
-                          {activity.estimated_cost > 0 && <span style={{ ...actTag, background: "#dcfce7", color: "#166534" }}>💰 ₹{activity.estimated_cost}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "culinary" && (
-            <div>
-              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "28px", marginBottom: "24px", color: "#0f172a" }}>🍽️ Local Cuisine</h2>
-              {culinary.length === 0 ? <EmptyState icon="🍽️" text="No culinary data added yet." /> : (
-                <div className="places-grid">
-                  {culinary.map((item) => {
-                    const selected = selectedCulinary.find((c) => c.id === item.id);
-                    return (
-                      <div key={item.id} className="place-card" onClick={() => toggleCulinary(item)} style={{ border: selected ? "2px solid #f59e0b" : "2px solid transparent", cursor: "pointer" }}>
-                        <div style={{ height: "160px", overflow: "hidden", background: "#fef3c7", position: "relative" }}>
-                          {item.image_url ? <img src={item.image_url} alt={item.dish_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "48px" }}>🍽️</div>}
-                          {selected && <div style={{ position: "absolute", top: "8px", right: "8px", background: "#f59e0b", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold" }}>✓</div>}
-                        </div>
-                        <div style={{ padding: "16px" }}>
-                          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "6px" }}>{item.dish_name}</h3>
-                          {item.description && <p style={{ fontSize: "13px", color: "#64748b", lineHeight: "1.5", marginBottom: "8px" }}>{item.description}</p>}
-                          {item.avg_price && <span style={{ ...actTag, background: "#dcfce7", color: "#166534" }}>💰 ₹{item.avg_price}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "reviews" && (
-            <div>
-              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "28px", marginBottom: "24px", color: "#0f172a" }}>Traveler Reviews</h2>
-              <EmptyState icon="⭐" text="No reviews yet. Be the first to review!" />
-            </div>
-          )}
-        </div>
-
-        {/* Trip Created Toast */}
+        {/* TOAST */}
         {tripCreated && (
-          <div style={{ position: "fixed", top: "20px", right: "20px", background: "#10b981", color: "#fff", padding: "16px 20px", borderRadius: "10px", fontWeight: "600", zIndex: 200, display: "flex", gap: "12px", alignItems: "center" }}>
+          <div className="ddtoast">
             ✅ Trip created successfully!
-            <button onClick={() => navigate("/dashboard")} style={{ background: "#fff", color: "#10b981", border: "none", padding: "6px 12px", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>
+            <Button onClick={() => navigate("/dashboard")} style={{ background:"#fff", color:"#16a34a", border:"none", padding:"6px 14px", borderRadius:"8px", fontWeight:700, fontFamily:"'DM Sans',sans-serif", fontSize:"13px", height:"auto" }}>
               View My Trips
-            </button>
+            </Button>
           </div>
         )}
 
-        {/* Budget Panel */}
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1px solid #e2e8f0", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", zIndex: 100, boxShadow: "0 -4px 12px rgba(0,0,0,0.08)" }}>
-          <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
-            {[
-              { label: "Base", value: `₹${baseBudget.toLocaleString()}`, color: "#0f172a" },
-              { label: "Activities", value: `+₹${activityCost.toLocaleString()}`, color: "#10b981" },
-              { label: "Places", value: `+₹${placeCost.toLocaleString()}`, color: "#10b981" },
-              { label: "Culinary", value: `+₹${culinaryCost.toLocaleString()}`, color: "#10b981" },
-            ].map((item) => (
-              <div key={item.label} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>{item.label}</div>
-                <div style={{ fontWeight: "700", color: item.color }}>{item.value}</div>
-              </div>
-            ))}
-            <div style={{ textAlign: "center", borderLeft: "1px solid #e2e8f0", paddingLeft: "24px" }}>
-              <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>Total Budget</div>
-              <div style={{ fontWeight: "800", color: "#f59e0b", fontSize: "18px" }}>₹{totalBudget.toLocaleString()}</div>
+        {/* HERO */}
+        <div className="ddhero">
+          {destination.image_url
+            ? <img src={destination.image_url} alt={destination.name} className="ddhimg" />
+            : <div className="ddhnone">🌍</div>
+          }
+          <div className="ddhgrad" />
+          <Button onClick={() => navigate(-1)} style={{
+            position:"absolute", top:28, left:28,
+            background:"rgba(28,25,23,.55)", color:"#fff",
+            backdropFilter:"blur(12px)", border:"1px solid rgba(255,255,255,.2)",
+            padding:"10px 20px", borderRadius:"50px", fontSize:"13px", fontWeight:600,
+            fontFamily:"'DM Sans',sans-serif", height:"auto",
+          }}>
+            ← Back
+          </Button>
+          <div className="ddhcontent">
+            <div className="ddhbadges">
+              {destination.category && (
+                <Badge style={{ background:"rgba(255,255,255,.15)", color:"#fff", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,.2)", fontFamily:"'DM Sans',sans-serif", fontSize:"12px", fontWeight:500, borderRadius:"20px" }}>
+                  {destination.category}
+                </Badge>
+              )}
+              {destination.country && (
+                <Badge style={{ background:"rgba(255,255,255,.15)", color:"#fff", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,.2)", fontFamily:"'DM Sans',sans-serif", fontSize:"12px", fontWeight:500, borderRadius:"20px" }}>
+                  📍 {destination.country}
+                </Badge>
+              )}
+              {destination.best_season && (
+                <Badge style={{ background:"rgba(212,168,83,.25)", color:"var(--gold)", border:"1px solid rgba(212,168,83,.4)", fontFamily:"'DM Sans',sans-serif", fontSize:"12px", fontWeight:500, borderRadius:"20px" }}>
+                  ✦ Best in {destination.best_season}
+                </Badge>
+              )}
+            </div>
+            <h1 className="ddhtitle">{destination.name}</h1>
+            <div className="ddhmeta">
+              {destination.climate && <div className="ddhmeta-item">🌡 {destination.climate} climate</div>}
+              <div className="ddhmeta-item">📍 {places.length} places</div>
+              <div className="ddhmeta-item">🎯 {activities.length} activities</div>
+              <div className="ddhmeta-item">🍽️ {culinary.length} culinary picks</div>
             </div>
           </div>
-          <button onClick={handleAddToTrip} disabled={saving}
-            style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)", color: "#fff", border: "none", padding: "14px 28px", borderRadius: "50px", fontSize: "15px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Saving..." : "+ Add to My Trip"}
-          </button>
+        </div>
+
+        {/* TABS */}
+        <div className="dd-tabs-wrap">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList>
+              <TabsTrigger value="overview">✦ Overview</TabsTrigger>
+              <TabsTrigger value="places">
+                📍 Places <span className="ddtab-count">{places.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="activities">
+                🎯 Activities <span className="ddtab-count">{activities.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="culinary">
+                🍽️ Culinary <span className="ddtab-count">{culinary.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="reviews">⭐ Reviews</TabsTrigger>
+            </TabsList>
+
+            <div className="ddcontent au">
+              <TabsContent value="overview">
+                <OverviewTab destination={destination} places={places} activities={activities} setActiveTab={setActiveTab} />
+              </TabsContent>
+              <TabsContent value="places">
+                <PlacesTab places={places} selectedPlaces={selectedPlaces} togglePlace={toggle(setSelectedPlaces)} />
+              </TabsContent>
+              <TabsContent value="activities">
+                <ActivitiesTab activities={activities} selectedActivities={selectedActivities} toggleActivity={toggle(setSelectedActivities)} />
+              </TabsContent>
+              <TabsContent value="culinary">
+                {/* ✅ FIXED: was toggle(setCulinary), now toggle(setSelectedCulinary) */}
+                <CulinaryTab culinary={culinary} selectedCulinary={selectedCulinary} toggleCulinary={toggle(setSelectedCulinary)} />
+              </TabsContent>
+              <TabsContent value="reviews">
+                <ReviewsTab destinationId={id} />
+              </TabsContent>
+            </div>
+          </Tabs>
+        </div>
+
+        {/* BUDGET BAR */}
+        <div className="ddbbar">
+          <div style={{ display:"flex", gap:"20px", flexWrap:"wrap", alignItems:"center" }}>
+            {[
+              { label:"Flight",     val: destination?.estimated_flight_cost || 0, green: false },
+              { label:"Stay",       val: destination?.estimated_stay_cost   || 0, green: false },
+              { label:"Food",       val: destination?.estimated_food_cost   || 0, green: false },
+              { label:"Activities", val: activityCost, green: true },
+              { label:"Places",     val: placeCost,    green: true },
+              { label:"Culinary",   val: culinaryCost, green: true },
+            ].map((item) => (
+              <div key={item.label} className="dbbitem">
+                <div className="dbblbl">{item.label}</div>
+                <div className={item.green ? "dbbval-g" : "dbbval"}>
+                  {item.green ? "+" : ""}₹{item.val.toLocaleString()}
+                </div>
+              </div>
+            ))}
+            <div className="dbbdiv" />
+            <div>
+              <div className="dbbtotal-lbl">Total Budget</div>
+              <div className="dbbtotal-val">₹{totalBudget.toLocaleString()}</div>
+            </div>
+          </div>
+
+          <Button
+            onClick={handleAddToTrip}
+            disabled={saving}
+            style={{
+              background: "var(--terra)", color: "#fff", border: "none",
+              padding: "14px 32px", borderRadius: "50px",
+              fontSize: "14px", fontWeight: 700,
+              fontFamily: "'DM Sans',sans-serif", height: "auto",
+              boxShadow: "0 4px 20px rgba(196,85,42,.35)",
+              display: "flex", alignItems: "center", gap: "8px",
+              opacity: saving ? 0.7 : 1,
+              transition: "all .25s",
+            }}
+          >
+            {saving ? "Creating trip..." : (
+              <>
+                + Add to My Trip
+                {totalSelected > 0 && (
+                  <Badge style={{ background: "var(--ink)", color: "var(--gold)", fontFamily: "'DM Sans',sans-serif", fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "12px", border: "none" }}>
+                    {totalSelected}
+                  </Badge>
+                )}
+              </>
+            )}
+          </Button>
         </div>
       </div>
     </>
   );
 };
 
-const PlaceCard = ({ place }) => (
-  <div className="place-card">
-    <div style={{ height: "180px", overflow: "hidden", background: "#f1f5f9" }}>
-      {place.image_url ? <img src={place.image_url} alt={place.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "48px" }}>📍</div>}
-    </div>
-    <div style={{ padding: "16px" }}>
-      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "6px" }}>{place.name}</h3>
-      {place.description && <p style={{ fontSize: "13px", color: "#64748b", lineHeight: "1.5", marginBottom: "10px" }}>{place.description?.slice(0, 100)}...</p>}
-      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>{place.type && <span style={placeTag}>{place.type}</span>}</div>
-    </div>
-  </div>
-);
-
-const EmptyState = ({ icon, text }) => (
-  <div style={{ textAlign: "center", padding: "60px 20px", color: "#94a3b8" }}>
-    <div style={{ fontSize: "48px", marginBottom: "12px" }}>{icon}</div>
-    <p style={{ fontSize: "16px" }}>{text}</p>
-  </div>
-);
-
-const heroTag = { background: "rgba(255,255,255,0.2)", color: "#fff", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", backdropFilter: "blur(10px)" };
-const placeTag = { background: "#e0f2fe", color: "#0369a1", padding: "2px 8px", borderRadius: "20px", fontSize: "11px", fontWeight: "500" };
-const actTag = { background: "#fef3c7", color: "#92400e", padding: "3px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: "500" };
-const btnStyle = { backgroundColor: "#0f172a", color: "#fff", border: "none", padding: "10px 24px", borderRadius: "8px", cursor: "pointer", marginTop: "16px" };
+const navBtnStyle = { background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", padding: "8px 16px", borderRadius: "50px", cursor: "pointer", fontSize: "14px", backdropFilter: "blur(10px)" };
+const statusBtnStyle = (bg) => ({ background: bg, border: "none", color: "#fff", padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600", cursor: "pointer" });
 
 export default DestinationDetail;

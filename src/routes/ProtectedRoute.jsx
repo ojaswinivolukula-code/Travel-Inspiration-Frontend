@@ -6,10 +6,15 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 
   if (loading) {
     return (
-      <div style={{
-        display: "flex", justifyContent: "center",
-        alignItems: "center", height: "100vh", fontSize: "18px"
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          fontSize: "18px",
+        }}
+      >
         Loading...
       </div>
     );
@@ -18,7 +23,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
   if (!user) return <Navigate to="/login" />;
 
   // If route requires admin but user is not admin
-  if (adminOnly && user.user_metadata?.role !== "admin") {
+  if (adminOnly && user.role !== "admin") {
     return <Navigate to="/dashboard" />;
   }
 

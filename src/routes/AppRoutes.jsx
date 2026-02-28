@@ -9,6 +9,9 @@ import DestinationDetail from "../pages/DestinationDetail";
 import ProtectedRoute from "./ProtectedRoute";
 import Explore from "../pages/Explore";
 import TripDetail from "../pages/TripDetail";
+import WriteReview from "../pages/WriteReview";
+import Journal from "@/pages/Journal";
+import Deals from "../pages/Deals";
 
 const AppRoutes = () => {
   const { user, loading } = useAuth();
@@ -32,25 +35,48 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      {/* ✅ HOME - Redirect if logged in, show landing if not */}
       <Route
-        path="/login"
-        element={user ? <Navigate to="/dashboard" /> : <Login />}
-      />
-      <Route
-        path="/register"
-        element={user ? <Navigate to="/dashboard" /> : <Register />}
+        path="/"
+        element={
+          user ? (
+            <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} />
+          ) : (
+            <LandingPage />
+          )
+        }
       />
 
+      {/* LOGIN - Redirect if already logged in */}
+      <Route
+        path="/login"
+        element={
+          user ? (
+            <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} />
+          ) : (
+            <Login />
+          )
+        }
+      />
+
+      {/* REGISTER - Redirect if already logged in */}
+      <Route
+        path="/register"
+        element={
+          user ? (
+            <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} />
+          ) : (
+            <Register />
+          )
+        }
+      />
+
+      {/* PROTECTED ROUTES */}
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
-            {user?.user_metadata?.role === "admin" ? (
-              <Navigate to="/admin" />
-            ) : (
-              <Dashboard />
-            )}
+            <Dashboard />
           </ProtectedRoute>
         }
       />
@@ -82,9 +108,43 @@ const AppRoutes = () => {
         }
       />
 
-      <Route path="/trips/:id" element={
-  <ProtectedRoute><TripDetail /></ProtectedRoute>
-} />
+      <Route
+        path="/trips/:id"
+        element={
+          <ProtectedRoute>
+            <TripDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/review/:destinationId"
+        element={
+          <ProtectedRoute>
+            <WriteReview />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/journal"
+        element={
+          <ProtectedRoute>
+            <Journal />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/deals"
+        element={
+          <ProtectedRoute>
+            <Deals />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* CATCH ALL - Redirect unknown routes to home */}
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );

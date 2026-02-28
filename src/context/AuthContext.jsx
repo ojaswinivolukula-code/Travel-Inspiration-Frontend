@@ -1,83 +1,76 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import axiosInstance from "../services/axiosInstance";
-import { useNavigate } from "react-router-dom";
 
 export const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
+const TOKEN_KEY = "token";
+const USER_KEY = "user";
+
+const saveAuth = (token, user) => {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  axiosInstance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+};
+
+const clearAuth = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith("sb-")) localStorage.removeItem(key);
+  });
+  delete axiosInstance.defaults.headers.common["Authorization"];
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-
-  const clearStorage = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("user");
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith("sb-")) localStorage.removeItem(key);
-    });
-  };
-
-  useEffect(() => {
-  const checkAuth = async () => {
-    const token = sessionStorage.getItem("token");
-    console.log("1. TOKEN:", token ? "EXISTS" : "NULL");
-
-    if (!token) {
-      console.log("2. NO TOKEN - stopping");
-      setLoading(false);
-      return;
-    }
-
+  const getInitialUser = () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const cached = localStorage.getItem(USER_KEY);
+    if (!token || !cached) return null;
     try {
-      console.log("3. CALLING /auth/me...");
-      const { data } = await axiosInstance.get("/auth/me");
-      console.log("4. AUTH ME DATA:", data);
-      if (data) setUser(data);
-      else {
-        console.log("5. NO DATA - clearing");
-        clearStorage();
-        setUser(null);
-      }
-    } catch (err) {
-      console.log("6. ERROR:", err.response?.status, err.message);
-      clearStorage();
-      setUser(null);
+      return JSON.parse(cached);
+    } catch {
+      return null;
     }
-
-    setLoading(false);
   };
 
-  checkAuth();
-}, []);
-  // LOGIN
+  const [user, setUser] = useState(getInitialUser);
+  const [loading, _setLoading] = useState(false);
+
   const login = async ({ email, password }) => {
-    const { data } = await axiosInstance.post("/auth/login", { email, password });
+    clearAuth();
+    setUser(null);
 
-    if (!data.session?.access_token || !data.user)
-      throw new Error("Login failed");
+    const { data } = await axiosInstance.post("/auth/login", {
+      email,
+      password,
+    });
 
-    // ✅ sessionStorage only
-    sessionStorage.setItem("token", data.session.access_token);
-    sessionStorage.setItem("user", JSON.stringify(data.user));
+    if (!data.session?.access_token)
+      throw new Error("Login failed: no token returned");
+    if (!data.user) throw new Error("Login failed: no user returned");
 
-    setUser(data.user);
-    return data.user;
+    const userWithRole = {
+      ...data.user,
+      role: data.user.role || "user",
+    };
+
+    saveAuth(data.session.access_token, userWithRole);
+    setUser(userWithRole);
+
+    console.log("LOGIN:", userWithRole.email, "| role:", userWithRole.role);
+    return userWithRole;
   };
 
-  // REGISTER
   const register = async ({ name, email, password }) => {
     await axiosInstance.post("/auth/register", { name, email, password });
     return await login({ email, password });
   };
 
-  // LOGOUT
   const logout = () => {
-    clearStorage();
+    clearAuth();
     setUser(null);
-    navigate("/");
+    window.location.href = "/login";
   };
 
   return (
