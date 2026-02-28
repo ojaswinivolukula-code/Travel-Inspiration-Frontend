@@ -73,13 +73,13 @@ App runs at `http://localhost:5173`
 
 ## 🚀 Deployment Link
 
-🌐 **Frontend (Netlify):** `https://your-app.netlify.app` *(update after deployment)*
+🌐 **Frontend (Netlify):** `https://69a33396341a88accd678730--travelinspirationapp.netlify.app/` 
 
 ---
 
 ## 🔗 Backend API Link
 
-⚙️ **Backend (Render):** `https://your-backend.onrender.com` *(update after deployment)*
+⚙️ **Backend (Render):** `https://travel-inspiration-backend.onrender.com` 
 
 ---
 
@@ -109,11 +109,7 @@ App runs at `http://localhost:5173`
 
 ---
 
-## 🎥 Video Walkthrough
 
-📹 **Demo Video:** `https://your-video-link.com` *(add after recording)*
-
----
 
 ## 📁 Project Structure
 
