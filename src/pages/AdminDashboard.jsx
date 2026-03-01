@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-const API = "http://localhost:5000/api";
+const API = "https://travel-inspiration-backend.onrender.com/api";
 
 const EMPTY_DEST     = { name: "", country: "", description: "", category: "adventure", climate: "tropical", best_season: "all", estimated_flight_cost: "", estimated_stay_cost: "", estimated_food_cost: "", image_url: "" };
 const EMPTY_PLACE    = { name: "", destination_id: "", description: "", entry_fee: "", best_time_to_visit: "", image_url: "" };

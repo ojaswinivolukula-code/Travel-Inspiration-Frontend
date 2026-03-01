@@ -29,7 +29,7 @@ const ReviewsTab = ({ destinationId }) => {
       try {
         const token = localStorage.getItem("token");
         if (token) {
-          const res = await fetch("http://localhost:5000/api/auth/me", {
+          const res = await fetch("https://travel-inspiration-backend.onrender.com/api/auth/me", {
             headers: { Authorization: `Bearer ${token}` },
           });
           const data = await res.json();
@@ -46,7 +46,7 @@ const ReviewsTab = ({ destinationId }) => {
     const fetchReviews = async () => {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/reviews/destination/${destinationId}`,
+        `https://travel-inspiration-backend.onrender.com/api/reviews/destination/${destinationId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const data = await res.json();
@@ -77,7 +77,7 @@ const ReviewsTab = ({ destinationId }) => {
       const token = localStorage.getItem("token");
       if (editingReview) {
         const res = await fetch(
-          `http://localhost:5000/api/reviews/${editingReview.id}`,
+          `https://travel-inspiration-backend.onrender.com/api/reviews/${editingReview.id}`,
           {
             method: "PUT",
             headers: {
@@ -90,7 +90,7 @@ const ReviewsTab = ({ destinationId }) => {
         if (!res.ok) throw new Error("Failed to update review");
         setEditingReview(null);
       } else {
-        const res = await fetch("http://localhost:5000/api/reviews", {
+        const res = await fetch("https://travel-inspiration-backend.onrender.com/api/reviews", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -131,7 +131,7 @@ const ReviewsTab = ({ destinationId }) => {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/reviews/${reviewToDelete}`,
+        `https://travel-inspiration-backend.onrender.com/api/reviews/${reviewToDelete}`,
         { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) throw new Error("Failed to delete");
