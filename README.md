@@ -102,14 +102,15 @@ App runs at `http://localhost:5173`
 |------|-----------|
 | Home / Destination List | ![alt text](image.png) |
 | Destination Detail Page | ![alt text](image-1.png) ![alt text](image-2.png)|
-| Trip Planner |![alt text](image-3.png)![alt text](image-4.png)![alt text](image-5.png)|
+| Trip Planner |![alt text](image-3.png)![alt text](image-4.png)![alt text](image-5.png)![alt text](image-9.png)|
 | Travel Journal |![alt text](image-6.png) |
 | Admin Dashboard | *(add image)* |
 | Reviews & Social Feed | ![alt text](image-7.png) ![alt text](image-8.png)|
 
 ---
 
-
+🎥 Video Walkthrough
+📹 Demo Video: (https://drive.google.com/file/d/1oBqfpQBonPT0GfbWQRAFU5ozOzFBUwJG/view?usp=sharing)
 
 ## 📁 Project Structure
 

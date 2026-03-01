@@ -15,85 +15,211 @@ const DestinationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [destination, setDestination] = useState(null);
-  const [places, setPlaces]           = useState([]);
-  const [activities, setActivities]   = useState([]);
-  const [culinary, setCulinary]       = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [selectedPlaces, setSelectedPlaces]         = useState([]);
+  const [places, setPlaces] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [culinary, setCulinary] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPlaces, setSelectedPlaces] = useState([]);
   const [selectedActivities, setSelectedActivities] = useState([]);
-  const [selectedCulinary, setSelectedCulinary]     = useState([]);
-  const [saving, setSaving]       = useState(false);
+  const [selectedCulinary, setSelectedCulinary] = useState([]);
+  const [saving, setSaving] = useState(false);
   const [tripCreated, setTripCreated] = useState(false);
-  const [error, setError]         = useState("");
+  const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
         const destRes = await axiosInstance.get(`/destinations/${id}`);
-        setDestination(Array.isArray(destRes.data) ? destRes.data[0] : destRes.data);
-        try { const r = await axiosInstance.get(`/places/destination/${id}`);     setPlaces(Array.isArray(r.data) ? r.data : r.data.places || []); }     catch { setPlaces([]); }
-        try { const r = await axiosInstance.get(`/activities/destination/${id}`); setActivities(Array.isArray(r.data) ? r.data : r.data.activities || []); } catch { setActivities([]); }
-        try { const r = await axiosInstance.get(`/culinary/destination/${id}`);   setCulinary(Array.isArray(r.data) ? r.data : r.data.culinary || []); }   catch { setCulinary([]); }
-      } catch { setError("Failed to load destination details"); }
-      finally { setLoading(false); }
+        setDestination(
+          Array.isArray(destRes.data) ? destRes.data[0] : destRes.data,
+        );
+        try {
+          const r = await axiosInstance.get(`/places/destination/${id}`);
+          setPlaces(Array.isArray(r.data) ? r.data : r.data.places || []);
+        } catch {
+          setPlaces([]);
+        }
+        try {
+          const r = await axiosInstance.get(`/activities/destination/${id}`);
+          setActivities(
+            Array.isArray(r.data) ? r.data : r.data.activities || [],
+          );
+        } catch {
+          setActivities([]);
+        }
+        try {
+          const r = await axiosInstance.get(`/culinary/destination/${id}`);
+          setCulinary(Array.isArray(r.data) ? r.data : r.data.culinary || []);
+        } catch {
+          setCulinary([]);
+        }
+      } catch {
+        setError("Failed to load destination details");
+      } finally {
+        setLoading(false);
+      }
     };
     fetchAll();
   }, [id]);
 
   const toggle = (setter) => (itemId) =>
-    setter((prev) => prev.includes(itemId) ? prev.filter((x) => x !== itemId) : [...prev, itemId]);
+    setter((prev) =>
+      prev.includes(itemId)
+        ? prev.filter((x) => x !== itemId)
+        : [...prev, itemId],
+    );
 
-  const activityCost = selectedActivities.reduce((s, id) => s + (activities.find((a) => a.id === id)?.estimated_cost || 0), 0);
-  const culinaryCost = selectedCulinary.reduce((s, id)   => s + (culinary.find((c)   => c.id === id)?.avg_price      || 0), 0);
-  const placeCost    = selectedPlaces.reduce((s, id)     => s + (places.find((p)     => p.id === id)?.entry_fee      || 0), 0);
-  const baseBudget   = (destination?.estimated_flight_cost || 0) + (destination?.estimated_stay_cost || 0) + (destination?.estimated_food_cost || 0);
-  const totalBudget  = baseBudget + activityCost + culinaryCost + placeCost;
-  const totalSelected = selectedPlaces.length + selectedActivities.length + selectedCulinary.length;
+  const activityCost = selectedActivities.reduce(
+    (s, id) => s + (activities.find((a) => a.id === id)?.estimated_cost || 0),
+    0,
+  );
+  const culinaryCost = selectedCulinary.reduce(
+    (s, id) => s + (culinary.find((c) => c.id === id)?.avg_price || 0),
+    0,
+  );
+  const placeCost = selectedPlaces.reduce(
+    (s, id) => s + (places.find((p) => p.id === id)?.entry_fee || 0),
+    0,
+  );
+  const baseBudget =
+    (destination?.estimated_flight_cost || 0) +
+    (destination?.estimated_stay_cost || 0) +
+    (destination?.estimated_food_cost || 0);
+  const totalBudget = baseBudget + activityCost + culinaryCost + placeCost;
+  const totalSelected =
+    selectedPlaces.length + selectedActivities.length + selectedCulinary.length;
 
   const handleAddToTrip = async () => {
     setSaving(true);
     try {
-      const tripRes = await axiosInstance.post("/trips", { destination_id: destination.id, total_budget: totalBudget, status: "planned",name:`Trip to ${destination.name}`,number_of_days:1 });
-      const tripId = tripRes.data?.id || tripRes.data?.trip?.id;
-      if (!tripId) throw new Error("Trip creation failed");
-      for (const placeId    of selectedPlaces)     await axiosInstance.post(`/trips/${tripId}/places`,     { place_id:    placeId    });
-      for (const activityId of selectedActivities) await axiosInstance.post(`/trips/${tripId}/activities`, { activity_id: activityId });
-      for (const culinaryId of selectedCulinary)   await axiosInstance.post(`/trips/${tripId}/culinary`,  { culinary_id: culinaryId });
+      const tripRes = await axiosInstance.post("/trips", {
+        destination_id: destination.id,
+        total_budget: totalBudget,
+        status: "planned",
+        name: `Trip to ${destination.name}`,
+        number_of_days: 1,
+      });
+      const tripId = tripRes.data?.[0]?.id || tripRes.data?.id;
+      if (!tripId) throw new Error("Trip ID missing");
+      for (const placeId of selectedPlaces)
+        await axiosInstance.post(`/trip-items/places`, {
+          trip_id: tripId,
+          place_id: placeId,
+        });
+
+      for (const activityId of selectedActivities)
+        await axiosInstance.post(`/trip-items/activities`, {
+          trip_id: tripId,
+          activity_id: activityId,
+        });
+
+      for (const culinaryId of selectedCulinary)
+        await axiosInstance.post(`/trip-items/culinary`, {
+          trip_id: tripId,
+          culinary_id: culinaryId,
+        });
       setTripCreated(true);
       setTimeout(() => navigate(`/trips/${tripId}`), 1500);
-    } catch { alert("Failed to create trip. Please try again."); }
-    finally { setSaving(false); }
+    } catch {
+      alert("Failed to create trip. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Loading state ─────────────────────────────────────────────────────────
-  if (loading) return (
-    <>
-      <style>{`
+  if (loading)
+    return (
+      <>
+        <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;} body{font-family:'DM Sans',sans-serif;}
         @keyframes ld{0%,80%,100%{transform:scale(.6);opacity:.3}40%{transform:scale(1.2);opacity:1}}
       `}</style>
-      <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", background:"#FDFAF7", flexDirection:"column", gap:"20px", fontFamily:"'DM Sans',sans-serif" }}>
-        <div style={{ fontSize:"64px" }}>🌍</div>
-        <p style={{ fontFamily:"'Playfair Display',serif", fontSize:"22px", fontStyle:"italic", color:"#78716C" }}>Loading destination...</p>
-        <div style={{ display:"flex", gap:"8px" }}>
-          {[0,.2,.4].map((d,i)=><div key={i} style={{ width:"10px",height:"10px",borderRadius:"50%",background:"#D4A853",animation:`ld 1.4s ${d}s ease-in-out infinite` }}/>)}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100vh",
+            background: "#FDFAF7",
+            flexDirection: "column",
+            gap: "20px",
+            fontFamily: "'DM Sans',sans-serif",
+          }}
+        >
+          <div style={{ fontSize: "64px" }}>🌍</div>
+          <p
+            style={{
+              fontFamily: "'Playfair Display',serif",
+              fontSize: "22px",
+              fontStyle: "italic",
+              color: "#78716C",
+            }}
+          >
+            Loading destination...
+          </p>
+          <div style={{ display: "flex", gap: "8px" }}>
+            {[0, 0.2, 0.4].map((d, i) => (
+              <div
+                key={i}
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "50%",
+                  background: "#D4A853",
+                  animation: `ld 1.4s ${d}s ease-in-out infinite`,
+                }}
+              />
+            ))}
+          </div>
         </div>
-      </div>
-    </>
-  );
+      </>
+    );
 
-  if (!destination) return (
-    <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh", background:"#FDFAF7", flexDirection:"column", gap:"16px", fontFamily:"'DM Sans',sans-serif" }}>
-      <div style={{ fontSize:"56px" }}>😕</div>
-      <p style={{ fontFamily:"'Playfair Display',serif", fontSize:"24px", color:"#1C1917" }}>Destination not found</p>
-      {error && <p style={{ color:"#C4552A", fontSize:"14px" }}>{error}</p>}
-      <Button onClick={() => navigate("/dashboard")} style={{ background:"#1C1917", color:"#D4A853", border:"none", padding:"12px 28px", borderRadius:"50px", fontFamily:"'DM Sans',sans-serif", fontWeight:600, height:"auto" }}>
-        Go to Dashboard
-      </Button>
-    </div>
-  );
+  if (!destination)
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          background: "#FDFAF7",
+          flexDirection: "column",
+          gap: "16px",
+          fontFamily: "'DM Sans',sans-serif",
+        }}
+      >
+        <div style={{ fontSize: "56px" }}>😕</div>
+        <p
+          style={{
+            fontFamily: "'Playfair Display',serif",
+            fontSize: "24px",
+            color: "#1C1917",
+          }}
+        >
+          Destination not found
+        </p>
+        {error && <p style={{ color: "#C4552A", fontSize: "14px" }}>{error}</p>}
+        <Button
+          onClick={() => navigate("/dashboard")}
+          style={{
+            background: "#1C1917",
+            color: "#D4A853",
+            border: "none",
+            padding: "12px 28px",
+            borderRadius: "50px",
+            fontFamily: "'DM Sans',sans-serif",
+            fontWeight: 600,
+            height: "auto",
+          }}
+        >
+          Go to Dashboard
+        </Button>
+      </div>
+    );
 
   return (
     <>
@@ -211,12 +337,24 @@ const DestinationDetail = () => {
       `}</style>
 
       <div style={{ background: "var(--white)", minHeight: "100vh" }}>
-
         {/* TOAST */}
         {tripCreated && (
           <div className="ddtoast">
             ✅ Trip created successfully!
-            <Button onClick={() => navigate("/dashboard")} style={{ background:"#fff", color:"#16a34a", border:"none", padding:"6px 14px", borderRadius:"8px", fontWeight:700, fontFamily:"'DM Sans',sans-serif", fontSize:"13px", height:"auto" }}>
+            <Button
+              onClick={() => navigate("/dashboard")}
+              style={{
+                background: "#fff",
+                color: "#16a34a",
+                border: "none",
+                padding: "6px 14px",
+                borderRadius: "8px",
+                fontWeight: 700,
+                fontFamily: "'DM Sans',sans-serif",
+                fontSize: "13px",
+                height: "auto",
+              }}
+            >
               View My Trips
             </Button>
           </div>
@@ -224,44 +362,100 @@ const DestinationDetail = () => {
 
         {/* HERO */}
         <div className="ddhero">
-          {destination.image_url
-            ? <img src={destination.image_url} alt={destination.name} className="ddhimg" />
-            : <div className="ddhnone">🌍</div>
-          }
+          {destination.image_url ? (
+            <img
+              src={destination.image_url}
+              alt={destination.name}
+              className="ddhimg"
+            />
+          ) : (
+            <div className="ddhnone">🌍</div>
+          )}
           <div className="ddhgrad" />
-          <Button onClick={() => navigate(-1)} style={{
-            position:"absolute", top:28, left:28,
-            background:"rgba(28,25,23,.55)", color:"#fff",
-            backdropFilter:"blur(12px)", border:"1px solid rgba(255,255,255,.2)",
-            padding:"10px 20px", borderRadius:"50px", fontSize:"13px", fontWeight:600,
-            fontFamily:"'DM Sans',sans-serif", height:"auto",
-          }}>
+          <Button
+            onClick={() => navigate(-1)}
+            style={{
+              position: "absolute",
+              top: 28,
+              left: 28,
+              background: "rgba(28,25,23,.55)",
+              color: "#fff",
+              backdropFilter: "blur(12px)",
+              border: "1px solid rgba(255,255,255,.2)",
+              padding: "10px 20px",
+              borderRadius: "50px",
+              fontSize: "13px",
+              fontWeight: 600,
+              fontFamily: "'DM Sans',sans-serif",
+              height: "auto",
+            }}
+          >
             ← Back
           </Button>
           <div className="ddhcontent">
             <div className="ddhbadges">
               {destination.category && (
-                <Badge style={{ background:"rgba(255,255,255,.15)", color:"#fff", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,.2)", fontFamily:"'DM Sans',sans-serif", fontSize:"12px", fontWeight:500, borderRadius:"20px" }}>
+                <Badge
+                  style={{
+                    background: "rgba(255,255,255,.15)",
+                    color: "#fff",
+                    backdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255,255,255,.2)",
+                    fontFamily: "'DM Sans',sans-serif",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    borderRadius: "20px",
+                  }}
+                >
                   {destination.category}
                 </Badge>
               )}
               {destination.country && (
-                <Badge style={{ background:"rgba(255,255,255,.15)", color:"#fff", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,.2)", fontFamily:"'DM Sans',sans-serif", fontSize:"12px", fontWeight:500, borderRadius:"20px" }}>
+                <Badge
+                  style={{
+                    background: "rgba(255,255,255,.15)",
+                    color: "#fff",
+                    backdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255,255,255,.2)",
+                    fontFamily: "'DM Sans',sans-serif",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    borderRadius: "20px",
+                  }}
+                >
                   📍 {destination.country}
                 </Badge>
               )}
               {destination.best_season && (
-                <Badge style={{ background:"rgba(212,168,83,.25)", color:"var(--gold)", border:"1px solid rgba(212,168,83,.4)", fontFamily:"'DM Sans',sans-serif", fontSize:"12px", fontWeight:500, borderRadius:"20px" }}>
+                <Badge
+                  style={{
+                    background: "rgba(212,168,83,.25)",
+                    color: "var(--gold)",
+                    border: "1px solid rgba(212,168,83,.4)",
+                    fontFamily: "'DM Sans',sans-serif",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    borderRadius: "20px",
+                  }}
+                >
                   ✦ Best in {destination.best_season}
                 </Badge>
               )}
             </div>
             <h1 className="ddhtitle">{destination.name}</h1>
             <div className="ddhmeta">
-              {destination.climate && <div className="ddhmeta-item">🌡 {destination.climate} climate</div>}
+              {destination.climate && (
+                <div className="ddhmeta-item">
+                  🌡 {destination.climate} climate
+                </div>
+              )}
               <div className="ddhmeta-item">📍 {places.length} places</div>
-              <div className="ddhmeta-item">🎯 {activities.length} activities</div>
-              <div className="ddhmeta-item">🍽️ {culinary.length} culinary picks</div>
+              <div className="ddhmeta-item">
+                🎯 {activities.length} activities
+              </div>
+              <div className="ddhmeta-item">
+                🍽️ {culinary.length} culinary picks
+              </div>
             </div>
           </div>
         </div>
@@ -275,27 +469,46 @@ const DestinationDetail = () => {
                 📍 Places <span className="ddtab-count">{places.length}</span>
               </TabsTrigger>
               <TabsTrigger value="activities">
-                🎯 Activities <span className="ddtab-count">{activities.length}</span>
+                🎯 Activities{" "}
+                <span className="ddtab-count">{activities.length}</span>
               </TabsTrigger>
               <TabsTrigger value="culinary">
-                🍽️ Culinary <span className="ddtab-count">{culinary.length}</span>
+                🍽️ Culinary{" "}
+                <span className="ddtab-count">{culinary.length}</span>
               </TabsTrigger>
               <TabsTrigger value="reviews">⭐ Reviews</TabsTrigger>
             </TabsList>
 
             <div className="ddcontent au">
               <TabsContent value="overview">
-                <OverviewTab destination={destination} places={places} activities={activities} setActiveTab={setActiveTab} />
+                <OverviewTab
+                  destination={destination}
+                  places={places}
+                  activities={activities}
+                  setActiveTab={setActiveTab}
+                />
               </TabsContent>
               <TabsContent value="places">
-                <PlacesTab places={places} selectedPlaces={selectedPlaces} togglePlace={toggle(setSelectedPlaces)} />
+                <PlacesTab
+                  places={places}
+                  selectedPlaces={selectedPlaces}
+                  togglePlace={toggle(setSelectedPlaces)}
+                />
               </TabsContent>
               <TabsContent value="activities">
-                <ActivitiesTab activities={activities} selectedActivities={selectedActivities} toggleActivity={toggle(setSelectedActivities)} />
+                <ActivitiesTab
+                  activities={activities}
+                  selectedActivities={selectedActivities}
+                  toggleActivity={toggle(setSelectedActivities)}
+                />
               </TabsContent>
               <TabsContent value="culinary">
                 {/* ✅ FIXED: was toggle(setCulinary), now toggle(setSelectedCulinary) */}
-                <CulinaryTab culinary={culinary} selectedCulinary={selectedCulinary} toggleCulinary={toggle(setSelectedCulinary)} />
+                <CulinaryTab
+                  culinary={culinary}
+                  selectedCulinary={selectedCulinary}
+                  toggleCulinary={toggle(setSelectedCulinary)}
+                />
               </TabsContent>
               <TabsContent value="reviews">
                 <ReviewsTab destinationId={id} />
@@ -306,14 +519,33 @@ const DestinationDetail = () => {
 
         {/* BUDGET BAR */}
         <div className="ddbbar">
-          <div style={{ display:"flex", gap:"20px", flexWrap:"wrap", alignItems:"center" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "20px",
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
             {[
-              { label:"Flight",     val: destination?.estimated_flight_cost || 0, green: false },
-              { label:"Stay",       val: destination?.estimated_stay_cost   || 0, green: false },
-              { label:"Food",       val: destination?.estimated_food_cost   || 0, green: false },
-              { label:"Activities", val: activityCost, green: true },
-              { label:"Places",     val: placeCost,    green: true },
-              { label:"Culinary",   val: culinaryCost, green: true },
+              {
+                label: "Flight",
+                val: destination?.estimated_flight_cost || 0,
+                green: false,
+              },
+              {
+                label: "Stay",
+                val: destination?.estimated_stay_cost || 0,
+                green: false,
+              },
+              {
+                label: "Food",
+                val: destination?.estimated_food_cost || 0,
+                green: false,
+              },
+              { label: "Activities", val: activityCost, green: true },
+              { label: "Places", val: placeCost, green: true },
+              { label: "Culinary", val: culinaryCost, green: true },
             ].map((item) => (
               <div key={item.label} className="dbbitem">
                 <div className="dbblbl">{item.label}</div>
@@ -325,7 +557,9 @@ const DestinationDetail = () => {
             <div className="dbbdiv" />
             <div>
               <div className="dbbtotal-lbl">Total Budget</div>
-              <div className="dbbtotal-val">₹{totalBudget.toLocaleString()}</div>
+              <div className="dbbtotal-val">
+                ₹{totalBudget.toLocaleString()}
+              </div>
             </div>
           </div>
 
@@ -333,21 +567,41 @@ const DestinationDetail = () => {
             onClick={handleAddToTrip}
             disabled={saving}
             style={{
-              background: "var(--terra)", color: "#fff", border: "none",
-              padding: "14px 32px", borderRadius: "50px",
-              fontSize: "14px", fontWeight: 700,
-              fontFamily: "'DM Sans',sans-serif", height: "auto",
+              background: "var(--terra)",
+              color: "#fff",
+              border: "none",
+              padding: "14px 32px",
+              borderRadius: "50px",
+              fontSize: "14px",
+              fontWeight: 700,
+              fontFamily: "'DM Sans',sans-serif",
+              height: "auto",
               boxShadow: "0 4px 20px rgba(196,85,42,.35)",
-              display: "flex", alignItems: "center", gap: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
               opacity: saving ? 0.7 : 1,
               transition: "all .25s",
             }}
           >
-            {saving ? "Creating trip..." : (
+            {saving ? (
+              "Creating trip..."
+            ) : (
               <>
                 + Add to My Trip
                 {totalSelected > 0 && (
-                  <Badge style={{ background: "var(--ink)", color: "var(--gold)", fontFamily: "'DM Sans',sans-serif", fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "12px", border: "none" }}>
+                  <Badge
+                    style={{
+                      background: "var(--ink)",
+                      color: "var(--gold)",
+                      fontFamily: "'DM Sans',sans-serif",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: "12px",
+                      border: "none",
+                    }}
+                  >
                     {totalSelected}
                   </Badge>
                 )}
@@ -360,7 +614,25 @@ const DestinationDetail = () => {
   );
 };
 
-const navBtnStyle = { background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", padding: "8px 16px", borderRadius: "50px", cursor: "pointer", fontSize: "14px", backdropFilter: "blur(10px)" };
-const statusBtnStyle = (bg) => ({ background: bg, border: "none", color: "#fff", padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600", cursor: "pointer" });
+const navBtnStyle = {
+  background: "rgba(255,255,255,0.15)",
+  border: "1px solid rgba(255,255,255,0.3)",
+  color: "#fff",
+  padding: "8px 16px",
+  borderRadius: "50px",
+  cursor: "pointer",
+  fontSize: "14px",
+  backdropFilter: "blur(10px)",
+};
+const statusBtnStyle = (bg) => ({
+  background: bg,
+  border: "none",
+  color: "#fff",
+  padding: "4px 12px",
+  borderRadius: "20px",
+  fontSize: "12px",
+  fontWeight: "600",
+  cursor: "pointer",
+});
 
 export default DestinationDetail;
